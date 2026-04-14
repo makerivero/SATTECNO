@@ -1163,11 +1163,23 @@ export default function App() {
     );
   };
 
-  // --- VISTA 6: PORTAL CLIENTE ---
+// --- VISTA 6: PORTAL CLIENTE ---
   const ViewCliente = () => {
     const [searchId, setSearchId] = useState('');
     const [foundOrder, setFoundOrder] = useState(null);
     const [hasSearched, setHasSearched] = useState(false);
+
+    // Efecto para auto-buscar si escaneó el QR
+    useEffect(() => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const ordenParam = urlParams.get('orden');
+      if (ordenParam && orders.length > 0 && !hasSearched) {
+        setSearchId(ordenParam);
+        const order = orders.find(o => o.id.toLowerCase() === ordenParam.toLowerCase());
+        setFoundOrder(order || null);
+        setHasSearched(true);
+      }
+    }, [orders, hasSearched]);
 
     const handleSearch = (e) => {
       e.preventDefault();
