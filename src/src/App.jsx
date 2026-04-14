@@ -14,14 +14,13 @@ import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged }
 import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 
 // --- CONFIGURACIÓN DE FIREBASE ---
-// IMPORTANTE: Cuando subas esto a tu PC o Vercel, reemplaza estos valores con los de tu Consola de Firebase.
 const defaultFirebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_PROYECTO.firebaseapp.com",
-  projectId: "TU_PROYECTO",
-  storageBucket: "TU_PROYECTO.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
+  apiKey: "AIzaSyA_EUsGO18xhooRkeLlPF2kj63x8qbmUyM",
+  authDomain: "sat-pringles.firebaseapp.com",
+  projectId: "sat-pringles",
+  storageBucket: "sat-pringles.firebasestorage.app",
+  messagingSenderId: "303055785861",
+  appId: "1:303055785861:web:13f57ca2b924b58f2f7eec"
 };
 
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : defaultFirebaseConfig;
@@ -29,7 +28,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
 // --- DICCIONARIO DE ETIQUETAS PARA DETALLES DE INGRESO ---
 const DETAILS_LABELS = {
   dyn_cpu: 'Componentes',
