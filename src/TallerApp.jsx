@@ -28,6 +28,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
 // --- DICCIONARIO DE ETIQUETAS PARA DETALLES DE INGRESO ---
 const DETAILS_LABELS = {
   dyn_cpu: 'Componentes',
@@ -47,11 +48,10 @@ const DETAILS_LABELS = {
   notes: 'Falla / Notas del Cliente'
 };
 
-// --- CONFIGURACIÓN INICIAL (Fallback si la DB está vacía) ---
 const initialConfigFallback = {
-  shopName: 'Tu Taller Tech',
-  address: 'Av. Siempre Viva 123',
-  phone: '112345678',
+  shopName: 'Sat Pringles',
+  address: 'San Luis, Argentina',
+  phone: '2664000000',
   terms: '1. El taller no se responsabiliza por pérdida de datos. Haga backup. 2. Pasados los 90 días, se cobrará estadía. 3. Garantía de 30 días.',
   password: 'admin' 
 };
@@ -62,14 +62,14 @@ const WORKFLOW_STATUSES = [
 ];
 
 const initialTechnicians = [
-  { id: 1, name: 'Carlos Admin', role: 'Administrador' },
-  { id: 2, name: 'Laura Técnico', role: 'Técnico Especialista' },
-  { id: 3, name: 'Ana Recepción', role: 'Recepcionista' }
+  { id: 1, name: 'Gustavo Admin', role: 'Administrador' },
+  { id: 2, name: 'Técnico Taller', role: 'Técnico Especialista' }
 ];
 
 // --- INTEGRACIÓN GEMINI API ---
 const callGeminiAPI = async (prompt) => {
-  const apiKey = ""; 
+  // Fix para Vercel: Evitamos usar import.meta para no generar error de build.
+  const apiKey = typeof window !== 'undefined' && window.VITE_GEMINI_API_KEY ? window.VITE_GEMINI_API_KEY : ""; 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
   const payload = {
     contents: [{ parts: [{ text: prompt }] }],
@@ -77,6 +77,7 @@ const callGeminiAPI = async (prompt) => {
   };
 
   const fetchWithRetry = async (retries = 5, delay = 1000) => {
+    if (!apiKey) return "API Key de IA no configurada.";
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -99,14 +100,19 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // MODO DINÁMICO: Entra a public si lee el código QR, si no, va al login
   const [appMode, setAppMode] = useState(() => {
-    return typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('orden') ? 'public' : 'login';
-  });
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.has('orden') ? 'public' : 'login';
+    }
+    return 'login';
+  }); 
+
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Datos traídos de Firebase
   const [orders, setOrders] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [servicesCatalog, setServicesCatalog] = useState([]);
@@ -200,6 +206,12 @@ export default function App() {
 
   const ReceiptModal = ({ data, onClose }) => {
     if (!data) return null;
+
+    // Genera el link inteligente a tu página web
+    const qrUrl = typeof window !== 'undefined' 
+      ? `${window.location.origin}/?orden=${data.id}` 
+      : `https://tusitio.com/?orden=${data.id}`;
+
     return (
       <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
         <div className="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -234,15 +246,14 @@ export default function App() {
             </div>
 
             <div className="text-center mb-6 flex flex-col items-center">
-              <p className="text-xs mb-2 font-bold">ESCANEÁ PARA VER EL ESTADO:</p>
-              <div className="bg-white p-2 border-2 border-black rounded inline-block mb-2">
+              <p className="text-xs mb-2 font-bold uppercase">Escaneá para ver el estado:</p>
+              <div className="bg-white p-2 border-2 border-black rounded inline-block mb-1">
                 <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent('https://tutaller.com/estado/' + data.id)}`} 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrUrl)}`} 
                   alt="QR" 
-                  width="120" 
-                  height="120" 
                 />
               </div>
+              <p className="text-[9px] text-slate-400 break-all">{qrUrl}</p>
             </div>
             <div className="border-t-2 border-dashed border-slate-300 pt-4 text-[10px] text-justify text-slate-600 leading-tight">
               <strong>Términos y Condiciones:</strong> {config.terms}
@@ -250,7 +261,7 @@ export default function App() {
           </div>
           <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-3">
             <button onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium transition-colors">Cerrar</button>
-            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center font-bold hover:bg-blue-700 transition-colors"><Printer size={18} className="mr-2" /> Imprimir</button>
+            <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center font-bold hover:bg-blue-700 transition-colors"><Printer size={18} className="mr-2" /> Imprimir</button>
           </div>
         </div>
       </div>
@@ -1163,7 +1174,7 @@ export default function App() {
     );
   };
 
-// --- VISTA 6: PORTAL CLIENTE ---
+  // --- VISTA 6: PORTAL CLIENTE ---
   const ViewCliente = () => {
     const [searchId, setSearchId] = useState('');
     const [foundOrder, setFoundOrder] = useState(null);
@@ -1171,6 +1182,7 @@ export default function App() {
 
     // Efecto para auto-buscar si escaneó el QR
     useEffect(() => {
+      if (typeof window === 'undefined') return;
       const urlParams = new URLSearchParams(window.location.search);
       const ordenParam = urlParams.get('orden');
       if (ordenParam && orders.length > 0 && !hasSearched) {
