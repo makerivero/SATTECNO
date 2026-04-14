@@ -96,12 +96,12 @@ const callGeminiAPI = async (prompt) => {
 };
 
 export default function App() {
-  // --- ESTADOS DE FIREBASE Y AUTH ---
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // --- ESTADOS DE LA APLICACIÓN ---
-  const [appMode, setAppMode] = useState('login'); 
+  const [appMode, setAppMode] = useState(() => {
+    return typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('orden') ? 'public' : 'login';
+  });
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
