@@ -221,49 +221,50 @@ export default function App() {
       : `https://tusitio.com/?orden=${data.id}`;
 
     return (
-      <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm print:absolute print:inset-0 print:bg-white print:p-0 print:block">
-        <div className="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] print:max-w-full print:shadow-none print:rounded-none print:max-h-none print:h-auto">
-          <div className="p-8 overflow-y-auto flex-1 font-mono text-sm bg-[#fcfcfc] text-slate-800 print:overflow-visible print:bg-white print:p-2" id="ticket-print">
-            <div className="text-center mb-4">
-              <h2 className="text-xl font-bold uppercase mb-1">{config.shopName}</h2>
-              <p className="text-xs text-slate-500">{config.address} - Tel: {config.phone}</p>
-              <div className="border-b-2 border-dashed border-slate-300 my-4"></div>
-              <h3 className="text-lg font-bold">REMITO DE RECEPCIÓN</h3>
-              <p className="text-base font-bold my-1">ORDEN: {data.id}</p>
-              <p className="text-xs">{new Date().toLocaleString()}</p>
+      <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[100] p-4 backdrop-blur-sm print:absolute print:inset-0 print:p-0 print:bg-transparent print:items-start print:justify-start">
+        <div className="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] print:max-w-none print:w-full print:h-auto print:max-h-none print:shadow-none print:rounded-none print:border-none">
+          <div className="p-8 overflow-y-auto flex-1 font-mono text-sm bg-[#fcfcfc] text-slate-800 print:overflow-visible print:bg-white print:p-4 print:text-[10px] print:leading-tight" id="ticket-print">
+            <div className="text-center mb-4 print:mb-2">
+              <h2 className="text-xl font-bold uppercase mb-1 print:text-base print:mb-0">{config.shopName}</h2>
+              <p className="text-xs text-slate-500 print:text-[8px]">{config.address} - Tel: {config.phone}</p>
+              <div className="border-b-2 border-dashed border-slate-300 my-4 print:my-2"></div>
+              <h3 className="text-lg font-bold print:text-sm">REMITO DE RECEPCIÓN</h3>
+              <p className="text-base font-bold my-1 print:text-[10px] print:my-0">ORDEN: {data.id}</p>
+              <p className="text-xs print:text-[8px]">{new Date().toLocaleString()}</p>
             </div>
             
-            <div className="space-y-1 mb-4">
+            <div className="space-y-1 mb-4 print:mb-2 print:space-y-0.5">
               <p><strong>Cliente:</strong> {data.client}</p>
               <p><strong>Teléfono:</strong> {data.phone}</p>
               {data.clientType === 'GREMIO' && <p><strong>Ref Local:</strong> {data.extRef}</p>}
-              <div className="border-b border-dotted border-slate-300 my-2"></div>
+              <div className="border-b border-dotted border-slate-300 my-2 print:my-1"></div>
               <p><strong>Equipo:</strong> {data.deviceDesc}</p>
               <p><strong>Presupuesto Máx:</strong> {data.budget || 'A cotizar'}</p>
             </div>
 
-            <div className="mb-4">
-              <p className="font-bold text-xs uppercase mb-1">Condiciones de Ingreso:</p>
-              <ul className="text-[11px] list-disc pl-4 space-y-1 bg-slate-100 p-2 rounded print:bg-white print:border print:border-slate-200">
+            <div className="mb-4 print:mb-2">
+              <p className="font-bold text-xs uppercase mb-1 print:text-[9px] print:mb-0">Condiciones de Ingreso:</p>
+              <ul className="text-[11px] list-disc pl-4 space-y-1 bg-slate-100 p-2 rounded print:bg-white print:border-none print:p-0 print:text-[8px] print:space-y-0 print:pl-3">
                 {data.details && Object.entries(data.details).map(([k, v]) => {
                   if(k === 'notes' || !v) return null;
                   return <li key={k}><strong>{DETAILS_LABELS[k] || k}:</strong> {v}</li>
                 })}
-                {data.details?.notes && <li className="mt-1"><strong>Notas:</strong> {data.details.notes}</li>}
+                {data.details?.notes && <li className="mt-1 print:mt-0.5"><strong>Notas:</strong> {data.details.notes}</li>}
               </ul>
             </div>
 
-            <div className="text-center mb-6 flex flex-col items-center">
-              <p className="text-xs mb-2 font-bold uppercase">Escaneá para ver el estado:</p>
-              <div className="bg-white p-2 border-2 border-black rounded inline-block mb-1">
+            <div className="text-center mb-6 flex flex-col items-center print:mb-2">
+              <p className="text-xs mb-2 font-bold uppercase print:text-[9px] print:mb-1">Escaneá para ver el estado:</p>
+              <div className="bg-white p-2 border-2 border-black rounded inline-block mb-1 print:p-1 print:border-none">
                 <img 
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrUrl)}`} 
                   alt="QR" 
+                  className="w-28 h-28 print:w-20 print:h-20"
                 />
               </div>
-              <p className="text-[9px] text-slate-400 break-all">{qrUrl}</p>
+              <p className="text-[9px] text-slate-400 break-all print:text-[7px]">{qrUrl}</p>
             </div>
-            <div className="border-t-2 border-dashed border-slate-300 pt-4 text-[10px] text-justify text-slate-600 leading-tight">
+            <div className="border-t-2 border-dashed border-slate-300 pt-4 text-[10px] text-justify text-slate-600 leading-tight print:pt-2 print:text-[7px]">
               <strong>Términos y Condiciones:</strong> {config.terms}
             </div>
           </div>
@@ -536,7 +537,7 @@ export default function App() {
             </div>
           </div>
           
-          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center rounded-b-xl">
+          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center rounded-b-xl print:hidden">
             <button onClick={() => { onClose(); setReceiptData(editedOrder); }} className="px-4 py-2 text-slate-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg font-medium transition-colors flex items-center">
               <Printer size={18} className="mr-2" /> Re-imprimir Remito
             </button>
@@ -1448,8 +1449,9 @@ export default function App() {
         
         /* Estilos específicos para impresión (A6) */
         @media print {
-          @page { size: 105mm 148mm; margin: 5mm; }
+          @page { size: 105mm 148mm; margin: 3mm; }
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: white; margin: 0; padding: 0; }
+          #ticket-print { max-width: 100% !important; margin: 0 auto; box-sizing: border-box; }
         }
       `}</style>
       
