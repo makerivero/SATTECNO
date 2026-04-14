@@ -57,10 +57,11 @@ const initialConfigFallback = {
   password: 'admin' 
 };
 
+// Ahora los técnicos tienen contraseñas individuales
 const initialTechnicians = [
-  { id: 1, name: 'Carlos Admin', role: 'Administrador' },
-  { id: 2, name: 'Laura Técnico', role: 'Técnico Especialista' },
-  { id: 3, name: 'Ana Recepción', role: 'Recepcionista' }
+  { id: 1, name: 'Gustavo Admin', role: 'Administrador', password: 'admin' },
+  { id: 2, name: 'Técnico Taller', role: 'Técnico Especialista', password: '1234' },
+  { id: 3, name: 'Recepción', role: 'Recepcionista', password: '1234' }
 ];
 
 const WORKFLOW_STATUSES = [
@@ -109,8 +110,11 @@ export default function App() {
     return 'login';
   }); 
 
+  // Estado para el selector de usuario en el login
+  const [loginUserSelect, setLoginUserSelect] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  
   const [activeTab, setActiveTab] = useState('dashboard');
   
   const [orders, setOrders] = useState([]);
@@ -122,6 +126,13 @@ export default function App() {
   const [activeTechId, setActiveTechId] = useState('');
   const [receiptData, setReceiptData] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null); 
+
+  // Auto-seleccionar el primer técnico disponible en el login
+  useEffect(() => {
+    if (technicians.length > 0 && !loginUserSelect) {
+      setLoginUserSelect(technicians[0].id.toString());
+    }
+  }, [technicians]);
 
   // --- EFECTOS DE FIREBASE ---
   useEffect(() => {
@@ -168,9 +179,12 @@ export default function App() {
       if (!snap.empty) {
         const techs = snap.docs.map(d => d.data());
         setTechnicians(techs);
-        if (techs.length > 0 && !activeTechId) setActiveTechId(techs[0].id);
       } else {
-        if (!activeTechId) setActiveTechId(initialTechnicians[0].id);
+        setTechnicians(initialTechnicians);
+        // Si la base está vacía, inicializamos los datos de prueba
+        initialTechnicians.forEach(async (t) => {
+          try { await setDoc(doc(db, getPath('technicians'), t.id.toString()), t); } catch(e){}
+        });
       }
     });
 
@@ -183,7 +197,7 @@ export default function App() {
     return () => {
       unsubOrders(); unsubInv(); unsubSrv(); unsubTech(); unsubConfig();
     };
-  }, [user, activeTechId]);
+  }, [user]);
 
 
   // --- COMPONENTES COMPARTIDOS ---
@@ -379,7 +393,6 @@ export default function App() {
             <div className="flex space-x-3 justify-center">
               <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium transition-colors">Cancelar</button>
               <button onClick={async () => {
-                // Borramos la orden de la base de datos de Firebase
                 setOrders(orders.filter(o => o.id !== editedOrder.id));
                 try { await deleteDoc(doc(db, getPath('orders'), editedOrder.id)); } catch(e){}
                 onClose();
@@ -403,7 +416,6 @@ export default function App() {
               <p className="text-sm text-slate-500 truncate">{editedOrder.deviceDesc} - Cliente: {editedOrder.client}</p>
             </div>
             
-            {/* BOTÓN DE ELIMINAR (TACHO DE BASURA) */}
             <div className="flex items-center space-x-2 shrink-0">
               <button type="button" onClick={() => setShowDeleteConfirm(true)} className="text-red-500 hover:bg-red-100 p-2 rounded-lg transition-colors" title="Eliminar Orden"><Trash2 size={20} /></button>
               <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2"><XCircle size={24} /></button>
@@ -525,7 +537,6 @@ export default function App() {
           </div>
           
           <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center rounded-b-xl">
-            {/* BOTÓN DE RE-IMPRIMIR */}
             <button onClick={() => { onClose(); setReceiptData(editedOrder); }} className="px-4 py-2 text-slate-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg font-medium transition-colors flex items-center">
               <Printer size={18} className="mr-2" /> Re-imprimir Remito
             </button>
@@ -1102,14 +1113,18 @@ export default function App() {
     );
   };
 
-  // --- VISTA 5: CONFIGURACIÓN ---
+  // --- VISTA 5: CONFIGURACIÓN Y GESTIÓN DE USUARIOS ---
   const ViewConfiguracion = () => {
     const [isUnlocked, setIsUnlocked] = useState(false);
     const [pwdInput, setPwdInput] = useState('');
     const [lockError, setLockError] = useState('');
     const [confTab, setConfTab] = useState('general');
+    
+    // Estados para Gestión de Técnicos
+    const [editingTechId, setEditingTechId] = useState(null);
     const [newTechName, setNewTechName] = useState('');
-    const [newTechRole, setNewTechRole] = useState('Técnico');
+    const [newTechRole, setNewTechRole] = useState('Técnico Especialista');
+    const [newTechPass, setNewTechPass] = useState('');
     
     const [oldPwd, setOldPwd] = useState('');
     const [newPwd, setNewPwd] = useState('');
@@ -1123,37 +1138,65 @@ export default function App() {
       try { await setDoc(doc(db, getPath('config'), 'main'), newConfig); alert('Configuración guardada.'); } catch(e){}
     };
 
-    const handleAddTech = async (e) => {
-      e.preventDefault();
-      if (!newTechName.trim()) return;
-      const techId = Date.now().toString();
-      const newTech = { id: Number(techId), name: newTechName, role: newTechRole };
-      setTechnicians([...technicians, newTech]);
-      try{ await setDoc(doc(db, getPath('technicians'), techId), newTech); } catch(e){}
+    const startEditTech = (tech) => {
+      setEditingTechId(tech.id);
+      setNewTechName(tech.name);
+      setNewTechRole(tech.role);
+      setNewTechPass(tech.password || '');
+    };
+
+    const cancelEditTech = () => {
+      setEditingTechId(null);
       setNewTechName('');
+      setNewTechRole('Técnico Especialista');
+      setNewTechPass('');
+    };
+
+    const handleSaveTech = async (e) => {
+      e.preventDefault();
+      if (!newTechName.trim() || !newTechPass.trim()) { 
+        alert('El nombre y la contraseña son obligatorios.'); 
+        return; 
+      }
+      
+      if (editingTechId) {
+        const updatedTech = { id: editingTechId, name: newTechName, role: newTechRole, password: newTechPass };
+        setTechnicians(technicians.map(t => t.id === editingTechId ? updatedTech : t));
+        try { await updateDoc(doc(db, getPath('technicians'), editingTechId.toString()), updatedTech); } catch(e){}
+      } else {
+        const techId = Date.now();
+        const newTech = { id: techId, name: newTechName, role: newTechRole, password: newTechPass };
+        setTechnicians([...technicians, newTech]);
+        try { await setDoc(doc(db, getPath('technicians'), techId.toString()), newTech); } catch(e){}
+      }
+      cancelEditTech();
     };
 
     const removeTech = async (id) => {
-      setTechnicians(technicians.filter(t=>t.id!==id));
-      try{ await deleteDoc(doc(db, getPath('technicians'), id.toString())); }catch(e){}
-    }
+      if(window.confirm("¿Seguro que deseas eliminar este usuario?")) {
+        setTechnicians(technicians.filter(t => t.id !== id));
+        try{ await deleteDoc(doc(db, getPath('technicians'), id.toString())); }catch(e){}
+      }
+    };
 
     const handleChangePassword = async (e) => {
       e.preventDefault();
       if (oldPwd !== config.password) { alert('Contraseña actual incorrecta.'); return; }
       if (newPwd !== confirmPwd) { alert('Las contraseñas no coinciden.'); return; }
       setConfig({ ...config, password: newPwd });
-      try{ await setDoc(doc(db, getPath('config'), 'main'), { ...config, password: newPwd }); alert('¡Contraseña actualizada!');}catch(e){}
+      try{ await setDoc(doc(db, getPath('config'), 'main'), { ...config, password: newPwd }); alert('¡Contraseña global actualizada!');}catch(e){}
+      setOldPwd(''); setNewPwd(''); setConfirmPwd('');
     };
 
     if (!isUnlocked) {
       return (
         <div className="max-w-md mx-auto mt-20 bg-white p-8 rounded-xl shadow-sm border border-slate-200 animate-fade-in">
-          <div className="text-center mb-6"><div className="bg-blue-100 text-blue-600 p-4 rounded-full inline-block mb-4"><Lock size={32} /></div><h2 className="text-2xl font-bold">Acceso Restringido</h2></div>
-          <form onSubmit={(e) => { e.preventDefault(); if (pwdInput === config.password) { setIsUnlocked(true); setLockError(''); } else { setLockError('Incorrecta'); } }} className="space-y-4">
+          <div className="text-center mb-6"><div className="bg-blue-100 text-blue-600 p-4 rounded-full inline-block mb-4"><Lock size={32} /></div><h2 className="text-2xl font-bold">Acceso a Configuración</h2></div>
+          <form onSubmit={(e) => { e.preventDefault(); if (pwdInput === config.password) { setIsUnlocked(true); setLockError(''); } else { setLockError('Clave maestra incorrecta'); } }} className="space-y-4">
              <input type="password" value={pwdInput} onChange={(e)=>setPwdInput(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-center tracking-widest text-xl outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••" autoFocus />
              {lockError && <p className="text-red-500 text-sm text-center">{lockError}</p>}
              <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700">Desbloquear</button>
+             <p className="text-xs text-slate-400 text-center mt-4">Solo administradores con clave maestra</p>
           </form>
         </div>
       );
@@ -1161,12 +1204,12 @@ export default function App() {
 
     return (
       <div className="max-w-4xl animate-fade-in">
-        <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center"><Settings className="mr-2 text-blue-600" /> Configuración</h2>
+        <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center"><Settings className="mr-2 text-blue-600" /> Configuración del Sistema</h2>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col md:flex-row min-h-[500px]">
           <div className="w-full md:w-64 bg-slate-50 border-r border-slate-200 p-4 space-y-2">
             <button onClick={() => setConfTab('general')} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium ${confTab === 'general' ? 'bg-blue-100 text-blue-700' : 'text-slate-600'}`}>Datos Generales</button>
-            <button onClick={() => setConfTab('tecnicos')} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium ${confTab === 'tecnicos' ? 'bg-blue-100 text-blue-700' : 'text-slate-600'}`}>Técnicos</button>
-            <button onClick={() => setConfTab('seguridad')} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium ${confTab === 'seguridad' ? 'bg-blue-100 text-blue-700' : 'text-slate-600'}`}>Seguridad</button>
+            <button onClick={() => setConfTab('tecnicos')} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium ${confTab === 'tecnicos' ? 'bg-blue-100 text-blue-700' : 'text-slate-600'}`}>Técnicos y Usuarios</button>
+            <button onClick={() => setConfTab('seguridad')} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium ${confTab === 'seguridad' ? 'bg-blue-100 text-blue-700' : 'text-slate-600'}`}>Clave Maestra</button>
           </div>
           <div className="flex-1 p-6">
             {confTab === 'general' && (
@@ -1178,26 +1221,58 @@ export default function App() {
                 <button type="submit" className="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg">Guardar Cambios</button>
               </form>
             )}
+            
             {confTab === 'tecnicos' && (
               <div>
-                <form onSubmit={handleAddTech} className="flex space-x-3 mb-6 bg-slate-50 p-4 rounded-lg border">
-                  <input type="text" placeholder="Nombre..." value={newTechName} onChange={(e) => setNewTechName(e.target.value)} className="flex-1 p-2 border rounded-lg" />
-                  <select value={newTechRole} onChange={(e) => setNewTechRole(e.target.value)} className="p-2 border rounded-lg bg-white"><option>Administrador</option><option>Técnico Especialista</option><option>Recepcionista</option></select>
-                  <button type="submit" className="bg-slate-800 text-white px-4 py-2 rounded-lg"><UserPlus size={18} /></button>
+                <form onSubmit={handleSaveTech} className="flex flex-col md:flex-row md:items-end gap-3 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                  <div className="flex-1">
+                    <label className="text-xs text-slate-500 font-bold mb-1 block">Nombre del Usuario</label>
+                    <input type="text" placeholder="Ej. Juan Pérez" value={newTechName} onChange={(e) => setNewTechName(e.target.value)} className="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div className="w-full md:w-48">
+                    <label className="text-xs text-slate-500 font-bold mb-1 block">Rol Asignado</label>
+                    <select value={newTechRole} onChange={(e) => setNewTechRole(e.target.value)} className="w-full p-2 border rounded-lg bg-white outline-none">
+                      <option>Administrador</option>
+                      <option>Técnico Especialista</option>
+                      <option>Recepcionista</option>
+                    </select>
+                  </div>
+                  <div className="w-full md:w-32">
+                    <label className="text-xs text-slate-500 font-bold mb-1 block">Contraseña</label>
+                    <input type="text" placeholder="Clave..." value={newTechPass} onChange={(e) => setNewTechPass(e.target.value)} className="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div className="flex gap-2">
+                    {editingTechId && <button type="button" onClick={cancelEditTech} className="bg-slate-200 text-slate-600 px-4 py-2 rounded-lg font-bold hover:bg-slate-300">X</button>}
+                    <button type="submit" className="bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-900 transition-colors flex items-center justify-center min-w-[3rem]">
+                      {editingTechId ? 'Guardar' : <UserPlus size={18} />}
+                    </button>
+                  </div>
                 </form>
-                <div className="space-y-2">
+
+                <div className="space-y-3">
                   {technicians.map(tech => (
-                    <div key={tech.id} className="flex justify-between items-center p-3 border rounded-lg"><p className="font-bold">{tech.name} <span className="text-xs font-normal text-slate-500">({tech.role})</span></p><button onClick={() => removeTech(tech.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 size={18} /></button></div>
+                    <div key={tech.id} className="flex justify-between items-center p-4 border border-slate-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-all">
+                      <div>
+                        <p className="font-bold text-slate-800">{tech.name} <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded ml-2 uppercase">{tech.role}</span></p>
+                        <p className="text-xs text-slate-400 mt-1">Clave de acceso: <span className="font-mono bg-slate-100 px-1 rounded">{tech.password || 'Sin clave'}</span></p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => startEditTech(tech)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors" title="Editar"><Edit size={18} /></button>
+                        <button onClick={() => removeTech(tech.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Eliminar"><Trash2 size={18} /></button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
             )}
+
             {confTab === 'seguridad' && (
               <form onSubmit={handleChangePassword} className="space-y-4 max-w-sm">
+                <p className="text-sm text-slate-500 mb-4">La clave maestra permite acceder a la configuración del sistema y puede usarse como respaldo para iniciar sesión con cualquier usuario.</p>
                 <input type="password" placeholder="Contraseña Actual" value={oldPwd} onChange={(e) => setOldPwd(e.target.value)} className="w-full p-2 border rounded-lg" required />
                 <input type="password" placeholder="Nueva Contraseña" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} className="w-full p-2 border rounded-lg" required />
                 <input type="password" placeholder="Confirmar Nueva" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} className="w-full p-2 border rounded-lg" required />
-                <button type="submit" className="w-full bg-slate-800 text-white font-bold py-2 rounded-lg">Actualizar Contraseña</button>
+                <button type="submit" className="w-full bg-slate-800 text-white font-bold py-2 rounded-lg">Actualizar Clave Maestra</button>
               </form>
             )}
           </div>
@@ -1208,25 +1283,71 @@ export default function App() {
 
   // --- RENDER PRINCIPAL MODO LOGIN / APP ---
   if (appMode === 'login') {
+    const handleLoginSubmit = (e) => {
+      e.preventDefault();
+      const selectedTech = technicians.find(t => t.id.toString() === loginUserSelect.toString());
+      
+      // Permitimos el ingreso si coincide la clave del técnico O la clave maestra global
+      if (selectedTech && (loginPassword === selectedTech.password || loginPassword === config.password)) {
+        setActiveTechId(selectedTech.id);
+        setAppMode('admin');
+        setLoginError('');
+        setLoginPassword('');
+      } else {
+        setLoginError('Contraseña incorrecta para este usuario.');
+      }
+    };
+
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center p-4 font-sans">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden animate-fade-in">
-          <div className="bg-blue-600 p-8 text-center">
-            <Wrench size={48} className="mx-auto text-white mb-4" />
-            <h1 className="text-3xl font-bold text-white tracking-tight">TallerPro</h1>
-            <p className="text-blue-200 mt-2">Sistema de Gestión Integral</p>
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden animate-fade-in border border-slate-200">
+          <div className="bg-blue-600 p-8 text-center relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-10"><Wrench size={100} /></div>
+            <Wrench size={48} className="mx-auto text-white mb-4 relative z-10" />
+            <h1 className="text-3xl font-bold text-white tracking-tight relative z-10">{config.shopName}</h1>
+            <p className="text-blue-200 mt-2 relative z-10">Control de Acceso</p>
           </div>
           <div className="p-8">
-            <form onSubmit={(e) => { e.preventDefault(); if (loginPassword === config.password || loginPassword === 'admin') { setAppMode('admin'); setLoginError(''); setLoginPassword(''); } else { setLoginError('Contraseña incorrecta.'); } }} className="space-y-6">
+            <form onSubmit={handleLoginSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Contraseña de Acceso</label>
-                <div className="relative"><Lock className="absolute left-3 top-3.5 text-slate-400" size={20} /><input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className="w-full pl-10 p-3 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-lg tracking-widest" placeholder="••••••" autoFocus /></div>
-                {loginError && <p className="text-red-500 text-sm mt-2 text-center">{loginError}</p>}
+                <label className="block text-sm font-bold text-slate-700 mb-2">Usuario Activo</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-3.5 text-slate-400" size={20} />
+                  <select 
+                    value={loginUserSelect} 
+                    onChange={(e) => setLoginUserSelect(e.target.value)} 
+                    className="w-full pl-10 p-3 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium appearance-none cursor-pointer"
+                  >
+                    {technicians.map(t => <option key={t.id} value={t.id}>{t.name} ({t.role})</option>)}
+                  </select>
+                </div>
               </div>
-              <button type="submit" className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors">Ingresar al Sistema</button>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Contraseña Personal</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3.5 text-slate-400" size={20} />
+                  <input 
+                    type="password" 
+                    value={loginPassword} 
+                    onChange={(e) => setLoginPassword(e.target.value)} 
+                    className="w-full pl-10 p-3 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-lg tracking-widest" 
+                    placeholder="••••••" 
+                    autoFocus 
+                  />
+                </div>
+                {loginError && <p className="text-red-500 text-xs mt-2 text-center font-bold bg-red-50 p-2 rounded">{loginError}</p>}
+              </div>
+
+              <button type="submit" className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-md mt-4">
+                Ingresar al Sistema
+              </button>
             </form>
+            
             <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-              <button onClick={() => { setAppMode('public'); setLoginError(''); setLoginPassword(''); }} className="flex items-center justify-center w-full px-4 py-3 bg-green-50 text-green-700 border border-green-200 rounded-xl font-bold hover:bg-green-100"><Search size={18} className="mr-2" /> Portal de Seguimiento</button>
+              <button onClick={() => { setAppMode('public'); setLoginError(''); setLoginPassword(''); }} className="flex items-center justify-center w-full px-4 py-3 bg-green-50 text-green-700 border border-green-200 rounded-xl font-bold hover:bg-green-100 transition-colors">
+                <Search size={18} className="mr-2" /> Portal de Seguimiento Cliente
+              </button>
             </div>
           </div>
         </div>
@@ -1314,6 +1435,9 @@ export default function App() {
     </div>;
   }
 
+  // Obtenemos los datos completos del técnico activo para mostrarlos en el menú lateral
+  const currentTech = technicians.find(t => t.id === activeTechId);
+
   return (
     <div className="min-h-screen bg-slate-100 flex font-sans">
       <style>{`
@@ -1333,15 +1457,19 @@ export default function App() {
           <SidebarItem icon={TrendingUp} label="Historial y Reportes" id="reportes" />
           <SidebarItem icon={Settings} label="Configuración" id="configuracion" />
         </nav>
-        <div className="px-4 py-2 mt-auto">
-          <button onClick={() => setAppMode('public')} className={`w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors border-2 border-dashed ${appMode === 'public' ? 'border-green-600 text-green-600 bg-green-50' : 'border-slate-300 text-slate-500'}`}><Smartphone size={18} /><span className="font-bold text-xs uppercase">Portal Cliente</span></button>
-          <button onClick={() => { setAppMode('login'); setActiveTab('dashboard'); }} className="w-full flex items-center justify-center space-x-2 px-4 py-2 mt-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"><LogOut size={18} /><span className="font-bold text-xs uppercase">Cerrar Sesión</span></button>
-        </div>
-        <div className="p-4 bg-slate-50 rounded-xl text-sm border border-slate-200 mt-4">
-          <label className="text-xs text-slate-500 font-bold mb-1 block text-left">Usuario Activo:</label>
-          <select className="w-full bg-white border rounded-lg p-2 outline-none" value={activeTechId || ''} onChange={(e) => setActiveTechId(Number(e.target.value))}>
-            {technicians.map(t => <option key={t.id} value={t.id}>{t.name} ({t.role})</option>)}
-          </select>
+        
+        {/* Panel del Usuario Fijo */}
+        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 mt-4 text-center">
+          <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-2 shadow-sm">
+            <User size={24}/>
+          </div>
+          <p className="font-bold text-slate-800 text-sm truncate">{currentTech?.name || 'Usuario'}</p>
+          <p className="text-xs text-slate-500 font-medium truncate mb-4">{currentTech?.role || 'Personal'}</p>
+          
+          <button onClick={() => { setAppMode('login'); setActiveTab('dashboard'); setLoginPassword(''); }} className="w-full flex items-center justify-center space-x-2 px-3 py-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-200 transition-colors shadow-sm">
+            <LogOut size={16} />
+            <span className="font-bold text-xs uppercase">Cerrar Sesión</span>
+          </button>
         </div>
       </aside>
       <main className="flex-1 p-8 overflow-y-auto">
