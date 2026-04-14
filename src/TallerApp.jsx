@@ -48,27 +48,28 @@ const DETAILS_LABELS = {
   notes: 'Falla / Notas del Cliente'
 };
 
+// --- CONFIGURACIÓN Y DATOS INICIALES (MOCKS) ---
 const initialConfigFallback = {
-  shopName: 'Sat Pringles',
-  address: 'San Luis, Argentina',
-  phone: '2664000000',
+  shopName: 'Tu Taller Tech',
+  address: 'Av. Siempre Viva 123',
+  phone: '112345678',
   terms: '1. El taller no se responsabiliza por pérdida de datos. Haga backup. 2. Pasados los 90 días, se cobrará estadía. 3. Garantía de 30 días.',
   password: 'admin' 
 };
+
+const initialTechnicians = [
+  { id: 1, name: 'Carlos Admin', role: 'Administrador' },
+  { id: 2, name: 'Laura Técnico', role: 'Técnico Especialista' },
+  { id: 3, name: 'Ana Recepción', role: 'Recepcionista' }
+];
 
 const WORKFLOW_STATUSES = [
   'Pendiente', 'En Diagnóstico', 'Presupuestado', 
   'Esperando Repuesto', 'Reparado / Para Entregar', 'Entregado', 'Sin Reparación'
 ];
 
-const initialTechnicians = [
-  { id: 1, name: 'Gustavo Admin', role: 'Administrador' },
-  { id: 2, name: 'Técnico Taller', role: 'Técnico Especialista' }
-];
-
 // --- INTEGRACIÓN GEMINI API ---
 const callGeminiAPI = async (prompt) => {
-  // Fix para Vercel: Evitamos usar import.meta para no generar error de build.
   const apiKey = typeof window !== 'undefined' && window.VITE_GEMINI_API_KEY ? window.VITE_GEMINI_API_KEY : ""; 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
   const payload = {
@@ -100,7 +101,6 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // MODO DINÁMICO: Entra a public si lee el código QR, si no, va al login
   const [appMode, setAppMode] = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -123,7 +123,7 @@ export default function App() {
   const [receiptData, setReceiptData] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null); 
 
-  // --- INICIALIZACIÓN DE FIREBASE ---
+  // --- EFECTOS DE FIREBASE ---
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -149,7 +149,6 @@ export default function App() {
     return typeof __app_id !== 'undefined' ? `artifacts/${appId}/users/${user?.uid || 'default'}/${colName}` : colName;
   };
 
-  // --- LISTENERS DE FIRESTORE ---
   useEffect(() => {
     if (!user) return;
 
@@ -171,7 +170,6 @@ export default function App() {
         setTechnicians(techs);
         if (techs.length > 0 && !activeTechId) setActiveTechId(techs[0].id);
       } else {
-        setTechnicians(initialTechnicians);
         if (!activeTechId) setActiveTechId(initialTechnicians[0].id);
       }
     });
@@ -187,9 +185,6 @@ export default function App() {
     };
   }, [user, activeTechId]);
 
-  if (loading) {
-    return <div className="min-h-screen bg-slate-100 flex justify-center items-center"><Loader2 className="animate-spin text-blue-600" size={48} /></div>;
-  }
 
   // --- COMPONENTES COMPARTIDOS ---
   const SidebarItem = ({ icon: Icon, label, id }) => (
@@ -207,7 +202,6 @@ export default function App() {
   const ReceiptModal = ({ data, onClose }) => {
     if (!data) return null;
 
-    // Genera el link inteligente a tu página web
     const qrUrl = typeof window !== 'undefined' 
       ? `${window.location.origin}/?orden=${data.id}` 
       : `https://tusitio.com/?orden=${data.id}`;
@@ -280,6 +274,8 @@ export default function App() {
     const [isMessaging, setIsMessaging] = useState(false);
     const [generatedMessage, setGeneratedMessage] = useState('');
     const [aiError, setAiError] = useState('');
+
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const handleGenerateMessage = async () => {
       setIsMessaging(true);
@@ -372,6 +368,30 @@ export default function App() {
     const totalServices = (editedOrder.services || []).reduce((sum, s) => sum + s.price, 0);
     const grandTotal = totalParts + totalServices;
 
+    // --- PANTALLA DE CONFIRMACIÓN DE ELIMINADO ---
+    if (showDeleteConfirm) {
+      return (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl flex flex-col animate-fade-in p-6 text-center">
+            <AlertTriangle size={48} className="mx-auto text-red-500 mb-4" />
+            <h2 className="text-xl font-bold text-slate-800 mb-2">¿Eliminar Orden?</h2>
+            <p className="text-slate-600 mb-6">Estás a punto de eliminar la orden <strong>{editedOrder.id}</strong>. Esta acción no se puede deshacer.</p>
+            <div className="flex space-x-3 justify-center">
+              <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium transition-colors">Cancelar</button>
+              <button onClick={async () => {
+                // Borramos la orden de la base de datos de Firebase
+                setOrders(orders.filter(o => o.id !== editedOrder.id));
+                try { await deleteDoc(doc(db, getPath('orders'), editedOrder.id)); } catch(e){}
+                onClose();
+              }} className="px-6 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg font-bold flex items-center transition-colors">
+                Sí, Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
         <div className="bg-white w-full max-w-3xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] animate-fade-in">
@@ -382,7 +402,12 @@ export default function App() {
               </h2>
               <p className="text-sm text-slate-500 truncate">{editedOrder.deviceDesc} - Cliente: {editedOrder.client}</p>
             </div>
-            <button onClick={onClose} className="shrink-0 text-slate-400 hover:text-red-500"><XCircle size={24} /></button>
+            
+            {/* BOTÓN DE ELIMINAR (TACHO DE BASURA) */}
+            <div className="flex items-center space-x-2 shrink-0">
+              <button type="button" onClick={() => setShowDeleteConfirm(true)} className="text-red-500 hover:bg-red-100 p-2 rounded-lg transition-colors" title="Eliminar Orden"><Trash2 size={20} /></button>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2"><XCircle size={24} /></button>
+            </div>
           </div>
 
           <div className="p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -498,9 +523,16 @@ export default function App() {
               </div>
             </div>
           </div>
-          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-3 rounded-b-xl">
-            <button onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium transition-colors">Cancelar</button>
-            <button onClick={handleSaveChanges} className="px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-bold flex items-center transition-colors"><Save size={18} className="mr-2" /> Guardar Cambios</button>
+          
+          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center rounded-b-xl">
+            {/* BOTÓN DE RE-IMPRIMIR */}
+            <button onClick={() => { onClose(); setReceiptData(editedOrder); }} className="px-4 py-2 text-slate-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg font-medium transition-colors flex items-center">
+              <Printer size={18} className="mr-2" /> Re-imprimir Remito
+            </button>
+            <div className="flex space-x-3">
+              <button onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium transition-colors">Cancelar</button>
+              <button onClick={handleSaveChanges} className="px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-bold flex items-center transition-colors"><Save size={18} className="mr-2" /> Guardar Cambios</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1174,97 +1206,6 @@ export default function App() {
     );
   };
 
-  // --- VISTA 6: PORTAL CLIENTE ---
-  const ViewCliente = () => {
-    const [searchId, setSearchId] = useState('');
-    const [foundOrder, setFoundOrder] = useState(null);
-    const [hasSearched, setHasSearched] = useState(false);
-
-    // Efecto para auto-buscar si escaneó el QR
-    useEffect(() => {
-      if (typeof window === 'undefined') return;
-      const urlParams = new URLSearchParams(window.location.search);
-      const ordenParam = urlParams.get('orden');
-      if (ordenParam && orders.length > 0 && !hasSearched) {
-        setSearchId(ordenParam);
-        const order = orders.find(o => o.id.toLowerCase() === ordenParam.toLowerCase());
-        setFoundOrder(order || null);
-        setHasSearched(true);
-      }
-    }, [orders, hasSearched]);
-
-    const handleSearch = (e) => {
-      e.preventDefault();
-      setFoundOrder(orders.find(o => o.id.toLowerCase() === searchId.toLowerCase()) || null);
-      setHasSearched(true);
-    };
-
-    const getProgressStep = (status) => {
-      if (['Entregado'].includes(status)) return 4;
-      if (['Reparado / Para Entregar', 'Sin Reparación'].includes(status)) return 3;
-      if (['En Diagnóstico', 'Presupuestado', 'Esperando Repuesto'].includes(status)) return 2;
-      return 1; 
-    };
-
-    const shouldShowDiagnosis = foundOrder && ['Presupuestado', 'Esperando Repuesto', 'Reparado / Para Entregar', 'Entregado'].includes(foundOrder.status);
-
-    return (
-      <div className={`max-w-md w-full mx-auto animate-fade-in bg-white shadow-2xl min-h-[100vh] sm:min-h-[700px] border border-slate-200 sm:rounded-[2.5rem] overflow-hidden flex flex-col relative sm:ring-8 ring-slate-800 ${appMode === 'public' ? 'sm:mt-10' : ''}`}>
-        <div className="bg-slate-800 text-white p-6 pt-10 text-center relative rounded-b-3xl shadow-md z-10">
-          {appMode === 'public' && <button onClick={() => setAppMode('login')} className="absolute top-6 left-6 text-slate-400 hover:text-white"><XCircle size={24} /></button>}
-          <h2 className="text-xl font-bold">{config.shopName}</h2>
-          <p className="text-slate-300 text-sm">Seguimiento de Reparación</p>
-        </div>
-
-        <div className="p-6 flex-1 bg-slate-50 overflow-y-auto">
-          <form onSubmit={handleSearch} className="mb-8 relative">
-            <input type="text" placeholder="Ej. ORD-001" value={searchId} onChange={(e) => setSearchId(e.target.value)} className="w-full p-4 pr-12 rounded-2xl border border-slate-300 shadow-sm outline-none font-mono uppercase text-slate-700" />
-            <button type="submit" className="absolute right-2 top-2 p-2 bg-blue-600 text-white rounded-xl"><Search size={20} /></button>
-          </form>
-
-          {hasSearched && !foundOrder && (
-            <div className="text-center p-6 bg-red-50 rounded-2xl border border-red-100 text-red-600 animate-fade-in"><AlertTriangle size={32} className="mx-auto mb-2" /><p className="font-bold">Orden no encontrada</p></div>
-          )}
-
-          {foundOrder && (
-            <div className="animate-fade-in space-y-6">
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                <p className="text-xs text-slate-500 font-bold uppercase mb-1">Equipo Ingresado</p>
-                <p className="text-lg font-bold text-slate-800">{foundOrder.deviceDesc}</p>
-                <div className="mt-3 flex justify-between pt-3 border-t border-slate-100"><span className="text-sm text-slate-500">Presupuesto:</span><span className="font-bold">${foundOrder.budget || 'A confirmar'}</span></div>
-              </div>
-
-              {shouldShowDiagnosis && foundOrder.details?.notes && (
-                <div className="bg-blue-50 p-5 rounded-2xl shadow-sm border border-blue-100">
-                  <p className="text-xs text-blue-600 font-bold uppercase mb-2 flex items-center"><Wrench size={14} className="mr-1" /> Diagnóstico Técnico</p>
-                  <p className="text-sm text-slate-700 whitespace-pre-wrap">{foundOrder.details.notes}</p>
-                </div>
-              )}
-
-              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 relative">
-                <p className="text-xs text-slate-500 font-bold uppercase mb-4">Estado de la Orden</p>
-                <div className="absolute left-[33px] top-[60px] bottom-[40px] w-0.5 bg-slate-200 z-0"></div>
-                <div className="space-y-6 relative z-10">
-                  {[ 
-                    { step: 1, title: 'Recibido en Taller', icon: CheckCircle2, bg: 'bg-blue-600' },
-                    { step: 2, title: 'En Revisión Técnica', icon: Wrench, bg: 'bg-blue-600' },
-                    { step: 3, title: 'Trabajo Finalizado', icon: foundOrder.status === 'Sin Reparación' ? XCircle : CheckCircle2, bg: foundOrder.status === 'Sin Reparación' ? 'bg-red-500' : 'bg-green-500' },
-                    { step: 4, title: 'Entregado', icon: Truck, bg: 'bg-slate-800' }
-                  ].map(s => (
-                    <div key={s.step} className="flex items-start">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-4 border-white shadow-sm ${getProgressStep(foundOrder.status) >= s.step ? `${s.bg} text-white` : 'bg-slate-200 text-slate-400'}`}><s.icon size={16} /></div>
-                      <div className="ml-4 pt-1"><p className={`font-bold text-sm ${getProgressStep(foundOrder.status) >= s.step ? 'text-slate-800' : 'text-slate-400'}`}>{s.title}</p></div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   // --- RENDER PRINCIPAL MODO LOGIN / APP ---
   if (appMode === 'login') {
     return (
@@ -1294,7 +1235,83 @@ export default function App() {
   }
 
   if (appMode === 'public') {
-    return <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center sm:p-4 font-sans"><ViewCliente /></div>;
+    return <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center sm:p-4 font-sans">
+      <div className={`max-w-md w-full mx-auto animate-fade-in bg-white shadow-2xl min-h-[100vh] sm:min-h-[700px] border border-slate-200 sm:rounded-[2.5rem] overflow-hidden flex flex-col relative sm:ring-8 ring-slate-800 ${appMode === 'public' ? 'sm:mt-10' : ''}`}>
+        <div className="bg-slate-800 text-white p-6 pt-10 text-center relative rounded-b-3xl shadow-md z-10">
+          {appMode === 'public' && <button onClick={() => { window.history.pushState({}, '', window.location.origin); setAppMode('login'); }} className="absolute top-6 left-6 text-slate-400 hover:text-white"><XCircle size={24} /></button>}
+          <h2 className="text-xl font-bold">{config.shopName}</h2>
+          <p className="text-slate-300 text-sm">Seguimiento de Reparación</p>
+        </div>
+
+        <div className="p-6 flex-1 bg-slate-50 overflow-y-auto">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const searchId = e.target.search.value;
+            const orderParam = new URLSearchParams(window.location.search).get('orden');
+            window.location.href = `/?orden=${searchId || orderParam}`;
+          }} className="mb-8 relative">
+            <input type="text" name="search" placeholder="Ej. ORD-001" defaultValue={new URLSearchParams(window.location.search).get('orden') || ''} className="w-full p-4 pr-12 rounded-2xl border border-slate-300 shadow-sm outline-none font-mono uppercase text-slate-700" />
+            <button type="submit" className="absolute right-2 top-2 p-2 bg-blue-600 text-white rounded-xl"><Search size={20} /></button>
+          </form>
+
+          {(() => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const ordenParam = urlParams.get('orden');
+            const foundOrder = orders.find(o => o.id.toLowerCase() === (ordenParam || '').toLowerCase());
+            
+            if (ordenParam && !foundOrder && orders.length > 0) {
+              return <div className="text-center p-6 bg-red-50 rounded-2xl border border-red-100 text-red-600 animate-fade-in"><AlertTriangle size={32} className="mx-auto mb-2" /><p className="font-bold">Orden no encontrada</p></div>;
+            }
+
+            if (foundOrder) {
+              const shouldShowDiagnosis = ['Presupuestado', 'Esperando Repuesto', 'Reparado / Para Entregar', 'Entregado'].includes(foundOrder.status);
+              const getProgressStep = (status) => {
+                if (['Entregado'].includes(status)) return 4;
+                if (['Reparado / Para Entregar', 'Sin Reparación'].includes(status)) return 3;
+                if (['En Diagnóstico', 'Presupuestado', 'Esperando Repuesto'].includes(status)) return 2;
+                return 1; 
+              };
+
+              return (
+                <div className="animate-fade-in space-y-6">
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <p className="text-xs text-slate-500 font-bold uppercase mb-1">Equipo Ingresado</p>
+                    <p className="text-lg font-bold text-slate-800">{foundOrder.deviceDesc}</p>
+                    <div className="mt-3 flex justify-between pt-3 border-t border-slate-100"><span className="text-sm text-slate-500">Presupuesto:</span><span className="font-bold">${foundOrder.budget || 'A confirmar'}</span></div>
+                  </div>
+
+                  {shouldShowDiagnosis && foundOrder.details?.notes && (
+                    <div className="bg-blue-50 p-5 rounded-2xl shadow-sm border border-blue-100">
+                      <p className="text-xs text-blue-600 font-bold uppercase mb-2 flex items-center"><Wrench size={14} className="mr-1" /> Diagnóstico Técnico</p>
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{foundOrder.details.notes}</p>
+                    </div>
+                  )}
+
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 relative">
+                    <p className="text-xs text-slate-500 font-bold uppercase mb-4">Estado de la Orden</p>
+                    <div className="absolute left-[33px] top-[60px] bottom-[40px] w-0.5 bg-slate-200 z-0"></div>
+                    <div className="space-y-6 relative z-10">
+                      {[ 
+                        { step: 1, title: 'Recibido en Taller', icon: CheckCircle2, bg: 'bg-blue-600' },
+                        { step: 2, title: 'En Revisión Técnica', icon: Wrench, bg: 'bg-blue-600' },
+                        { step: 3, title: 'Trabajo Finalizado', icon: foundOrder.status === 'Sin Reparación' ? XCircle : CheckCircle2, bg: foundOrder.status === 'Sin Reparación' ? 'bg-red-500' : 'bg-green-500' },
+                        { step: 4, title: 'Entregado', icon: Truck, bg: 'bg-slate-800' }
+                      ].map(s => (
+                        <div key={s.step} className="flex items-start">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-4 border-white shadow-sm ${getProgressStep(foundOrder.status) >= s.step ? `${s.bg} text-white` : 'bg-slate-200 text-slate-400'}`}><s.icon size={16} /></div>
+                          <div className="ml-4 pt-1"><p className={`font-bold text-sm ${getProgressStep(foundOrder.status) >= s.step ? 'text-slate-800' : 'text-slate-400'}`}>{s.title}</p></div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+        </div>
+      </div>
+    </div>;
   }
 
   return (
@@ -1317,7 +1334,7 @@ export default function App() {
           <SidebarItem icon={Settings} label="Configuración" id="configuracion" />
         </nav>
         <div className="px-4 py-2 mt-auto">
-          <button onClick={() => setActiveTab('portal-cliente')} className={`w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors border-2 border-dashed ${activeTab === 'portal-cliente' ? 'border-green-600 text-green-600 bg-green-50' : 'border-slate-300 text-slate-500'}`}><Smartphone size={18} /><span className="font-bold text-xs uppercase">Portal Cliente</span></button>
+          <button onClick={() => setAppMode('public')} className={`w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors border-2 border-dashed ${appMode === 'public' ? 'border-green-600 text-green-600 bg-green-50' : 'border-slate-300 text-slate-500'}`}><Smartphone size={18} /><span className="font-bold text-xs uppercase">Portal Cliente</span></button>
           <button onClick={() => { setAppMode('login'); setActiveTab('dashboard'); }} className="w-full flex items-center justify-center space-x-2 px-4 py-2 mt-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"><LogOut size={18} /><span className="font-bold text-xs uppercase">Cerrar Sesión</span></button>
         </div>
         <div className="p-4 bg-slate-50 rounded-xl text-sm border border-slate-200 mt-4">
@@ -1335,7 +1352,6 @@ export default function App() {
         {activeTab === 'inventario' && <ViewInventario />}
         {activeTab === 'reportes' && <ViewReportes />}
         {activeTab === 'configuracion' && <ViewConfiguracion />}
-        {activeTab === 'portal-cliente' && <ViewCliente />}
       </main>
       {selectedOrder && <OrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
       <ReceiptModal data={receiptData} onClose={() => setReceiptData(null)} />
