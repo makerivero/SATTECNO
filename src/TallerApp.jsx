@@ -221,9 +221,9 @@ export default function App() {
       : `https://tusitio.com/?orden=${data.id}`;
 
     return (
-      <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-        <div className="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-          <div className="p-8 overflow-y-auto flex-1 font-mono text-sm bg-[#fcfcfc] text-slate-800" id="ticket-print">
+      <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm print:absolute print:inset-0 print:bg-white print:p-0 print:block">
+        <div className="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] print:max-w-full print:shadow-none print:rounded-none print:max-h-none print:h-auto">
+          <div className="p-8 overflow-y-auto flex-1 font-mono text-sm bg-[#fcfcfc] text-slate-800 print:overflow-visible print:bg-white print:p-2" id="ticket-print">
             <div className="text-center mb-4">
               <h2 className="text-xl font-bold uppercase mb-1">{config.shopName}</h2>
               <p className="text-xs text-slate-500">{config.address} - Tel: {config.phone}</p>
@@ -244,7 +244,7 @@ export default function App() {
 
             <div className="mb-4">
               <p className="font-bold text-xs uppercase mb-1">Condiciones de Ingreso:</p>
-              <ul className="text-[11px] list-disc pl-4 space-y-1 bg-slate-100 p-2 rounded">
+              <ul className="text-[11px] list-disc pl-4 space-y-1 bg-slate-100 p-2 rounded print:bg-white print:border print:border-slate-200">
                 {data.details && Object.entries(data.details).map(([k, v]) => {
                   if(k === 'notes' || !v) return null;
                   return <li key={k}><strong>{DETAILS_LABELS[k] || k}:</strong> {v}</li>
@@ -267,7 +267,7 @@ export default function App() {
               <strong>Términos y Condiciones:</strong> {config.terms}
             </div>
           </div>
-          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-3">
+          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-3 print:hidden">
             <button onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium transition-colors">Cerrar</button>
             <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center font-bold hover:bg-blue-700 transition-colors"><Printer size={18} className="mr-2" /> Imprimir</button>
           </div>
@@ -385,7 +385,7 @@ export default function App() {
     // --- PANTALLA DE CONFIRMACIÓN DE ELIMINADO ---
     if (showDeleteConfirm) {
       return (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[60] p-4 backdrop-blur-sm print:hidden">
           <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl flex flex-col animate-fade-in p-6 text-center">
             <AlertTriangle size={48} className="mx-auto text-red-500 mb-4" />
             <h2 className="text-xl font-bold text-slate-800 mb-2">¿Eliminar Orden?</h2>
@@ -406,7 +406,7 @@ export default function App() {
     }
 
     return (
-      <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+      <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm print:hidden">
         <div className="bg-white w-full max-w-3xl rounded-xl shadow-2xl flex flex-col max-h-[90vh] animate-fade-in">
           <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-xl">
             <div className="min-w-0 pr-4">
@@ -1439,14 +1439,22 @@ export default function App() {
   const currentTech = technicians.find(t => t.id === activeTechId);
 
   return (
-    <div className="min-h-screen bg-slate-100 flex font-sans">
+    <div className="min-h-screen bg-slate-100 flex font-sans print:bg-white print:block">
       <style>{`
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
         @keyframes alertShine { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0px rgba(239, 68, 68, 0)); } 50% { transform: scale(1.1); filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6)); color: #dc2626; } }
         .animate-alert-shine { animation: alertShine 2s infinite ease-in-out; }
+        
+        /* Estilos específicos para impresión (A6) */
+        @media print {
+          @page { size: 105mm 148mm; margin: 5mm; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: white; margin: 0; padding: 0; }
+        }
       `}</style>
-      <aside className="w-64 bg-white border-r border-slate-200 p-4 flex flex-col">
+      
+      {/* Menú lateral, se oculta al imprimir (print:hidden) */}
+      <aside className="w-64 bg-white border-r border-slate-200 p-4 flex flex-col print:hidden">
         <div className="flex items-center space-x-3 px-2 mb-8 mt-2"><div className="bg-blue-600 p-2 rounded-lg text-white"><Wrench size={24} /></div><span className="font-bold text-xl text-slate-800 tracking-tight">TallerPro</span></div>
         <nav className="flex-1">
           <SidebarItem icon={LayoutDashboard} label="Dashboard" id="dashboard" />
@@ -1472,7 +1480,9 @@ export default function App() {
           </button>
         </div>
       </aside>
-      <main className="flex-1 p-8 overflow-y-auto">
+      
+      {/* Contenido principal, se oculta al imprimir (print:hidden) */}
+      <main className="flex-1 p-8 overflow-y-auto print:hidden">
         {activeTab === 'dashboard' && <ViewDashboard />}
         {activeTab === 'recepcion' && <ViewReception />}
         {activeTab === 'taller' && <ViewTaller />}
@@ -1481,6 +1491,7 @@ export default function App() {
         {activeTab === 'reportes' && <ViewReportes />}
         {activeTab === 'configuracion' && <ViewConfiguracion />}
       </main>
+      
       {selectedOrder && <OrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
       <ReceiptModal data={receiptData} onClose={() => setReceiptData(null)} />
     </div>
